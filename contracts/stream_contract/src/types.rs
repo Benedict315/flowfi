@@ -1,4 +1,4 @@
-#![allow(unused)]
+
 
 use soroban_sdk::{contracttype, Address};
 
@@ -44,6 +44,10 @@ pub struct Stream {
     pub last_update_time: u64,
     /// `false` once fully withdrawn or cancelled.
     pub is_active: bool,
+    /// `true` while the stream is paused; accrual is frozen at `paused_at`.
+    pub paused: bool,
+    /// Ledger timestamp at which the stream was paused (0 when not paused).
+    pub paused_at: u64,
 }
 
 /// Protocol-wide fee configuration.

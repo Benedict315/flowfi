@@ -69,3 +69,39 @@ pub struct FeeCollectedEvent {
     pub fee_amount: i128,
     pub token: Address,
 }
+
+/// Emitted when the protocol admin is transferred to a new address.
+///
+/// Topic: `("admin_transferred",)`
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminTransferredEvent {
+    /// The previous admin address that initiated the transfer.
+    pub previous_admin: Address,
+    /// The new admin address that now controls the protocol.
+    pub new_admin: Address,
+}
+
+/// Emitted when a stream is paused.
+///
+/// Topic: `("stream_paused", stream_id)`
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StreamPausedEvent {
+    pub stream_id: u64,
+    pub sender: Address,
+    /// Ledger timestamp at which accrual was frozen.
+    pub paused_at: u64,
+}
+
+/// Emitted when a stream is resumed after being paused.
+///
+/// Topic: `("stream_resumed", stream_id)`
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StreamResumedEvent {
+    pub stream_id: u64,
+    pub sender: Address,
+    /// Ledger timestamp at which streaming resumed.
+    pub resumed_at: u64,
+}
