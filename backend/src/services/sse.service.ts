@@ -1,5 +1,6 @@
 import type { Response } from 'express';
 import logger from '../logger.js';
+import { isRedisAvailable, getPublisher, getSubscriber } from '../lib/redis.js';
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const MAX_WRITABLE_BUFFER = 64 * 1024;
@@ -16,7 +17,6 @@ export class SSEService {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private slowClientsDropped = 0;
 
-  addClient(clientId: string, res: Response, subscriptions: string[] = []): void {
     const client: SSEClient = {
       id: clientId,
       res,
@@ -25,11 +25,12 @@ export class SSEService {
     };
 
     this.clients.set(clientId, client);
-    logger.info(`SSE client connected: ${clientId}, subscriptions: ${subscriptions.join(', ')}`);
+    logger.info(
+      `[SSEService] Connection opened: ${clientId}, ip: ${ip}, subscriptions: ${subscriptions.join(', ')}`
+    );
 
     res.on('close', () => {
-      this.clients.delete(clientId);
-      logger.info(`SSE client disconnected: ${clientId}`);
+      this.removeClient(clientId);
     });
 
     this.ensureHeartbeat();

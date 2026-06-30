@@ -5,4 +5,8 @@ target
 .DS_Store
 coverage
 *.log
-*.sh
+
+# Soroban test runner — auto-generated, never commit
+**/test_snapshots/
+fix.md
+.npm-cache/
