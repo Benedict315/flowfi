@@ -21,14 +21,14 @@ export interface ChainStream {
   isActive: boolean;
 }
 
-function decodeI128(val: xdr.ScVal): string {
+export function decodeI128(val: xdr.ScVal): string {
   const parts = val.i128();
   const hi = BigInt.asIntN(64, BigInt(parts.hi().toString()));
   const lo = BigInt.asUintN(64, BigInt(parts.lo().toString()));
   return ((hi << 64n) | lo).toString();
 }
 
-function decodeAddress(val: xdr.ScVal): string {
+export function decodeAddress(val: xdr.ScVal): string {
   const addr = val.address();
   if (addr.switch().value === xdr.ScAddressType.scAddressTypeAccount().value) {
     return StrKey.encodeEd25519PublicKey(addr.accountId().ed25519());
@@ -51,8 +51,10 @@ async function simulateContractCall(method: string, args: xdr.ScVal[]): Promise<
   const op = contract.call(method, ...args);
 
   const tx = new TransactionBuilder(
+    // Read-only simulations don't consume a real source account; use a valid
+    // all-zero placeholder so Account construction never throws.
     new Account(
-      'GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN',
+      'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
       '0'
     ),
     {
@@ -77,7 +79,7 @@ async function simulateContractCall(method: string, args: xdr.ScVal[]): Promise<
   return simSuccess.result!.retval;
 }
 
-async function submitContractCall(method: string, args: xdr.ScVal[], senderSecret: string): Promise<string> {
+export async function submitContractCall(method: string, args: xdr.ScVal[], senderSecret: string): Promise<string> {
   if (!CONTRACT_ID) throw new Error('CONTRACT_ID not set');
 
   const keypair = Keypair.fromSecret(senderSecret);
