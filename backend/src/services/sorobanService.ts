@@ -4,8 +4,28 @@ import logger from '../logger.js';
 const RPC_URL = process.env.SOROBAN_RPC_URL ?? 'https://soroban-testnet.stellar.org';
 const CONTRACT_ID = process.env.STREAM_CONTRACT_ID ?? '';
 const KEEPER_SECRET = process.env.KEEPER_SECRET_KEY ?? '';
-/** DB data older than this is considered stale and triggers an RPC fallback. */
+/**
+ * DB data older than this is considered stale and triggers an RPC fallback.
+ * 30 s ≈ avg Stellar ledger close time (~5 s) × 6 ledgers — a reasonable
+ * window to tolerate indexer lag without hammering the RPC on every request.
+ */
 const STALE_THRESHOLD_MS = 30_000;
+
+/** Stroops charged on read-only simulation transactions (no real resource cost). */
+const SIMULATION_FEE = '100';
+
+/** Stroops charged on real contract-invocation transactions submitted to the network. */
+const SUBMIT_FEE = '1000';
+
+/** Transaction validity window in seconds (applied via setTimeout). */
+const TX_TIMEOUT_SECONDS = 30;
+
+/**
+ * Throw-away source account used when building simulation-only transactions.
+ * Any valid Ed25519 public key works here; the account never needs to exist on-chain
+ * because simulation transactions are never submitted.
+ */
+const SIMULATION_PLACEHOLDER_ACCOUNT = 'GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN';
 
 const server = new rpc.Server(RPC_URL, { allowHttp: true });
 
@@ -52,13 +72,10 @@ async function simulateContractCall(method: string, args: xdr.ScVal[]): Promise<
 
   const tx = new TransactionBuilder(
     // Read-only simulations don't consume a real source account; use a valid
-    // all-zero placeholder so Account construction never throws.
-    new Account(
-      'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-      '0'
-    ),
+    // placeholder so Account construction never throws.
+    new Account(SIMULATION_PLACEHOLDER_ACCOUNT, '0'),
     {
-      fee: '100',
+      fee: SIMULATION_FEE,
       networkPassphrase:
         process.env.STELLAR_NETWORK === 'mainnet'
           ? Networks.PUBLIC
@@ -66,7 +83,7 @@ async function simulateContractCall(method: string, args: xdr.ScVal[]): Promise<
     }
   )
     .addOperation(op)
-    .setTimeout(30)
+    .setTimeout(TX_TIMEOUT_SECONDS)
     .build();
 
   const result = await server.simulateTransaction(tx);
@@ -89,14 +106,14 @@ export async function submitContractCall(method: string, args: xdr.ScVal[], send
   const op = contract.call(method, ...args);
 
   const tx = new TransactionBuilder(account, {
-    fee: '1000',
+    fee: SUBMIT_FEE,
     networkPassphrase:
       process.env.STELLAR_NETWORK === 'mainnet'
         ? Networks.PUBLIC
         : Networks.TESTNET,
   })
     .addOperation(op)
-    .setTimeout(30)
+    .setTimeout(TX_TIMEOUT_SECONDS)
     .build();
 
   // Simulate first to get foot print and resource info
