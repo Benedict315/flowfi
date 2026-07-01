@@ -111,7 +111,7 @@ function SkeletonCard({ className = "" }: { className?: string }) {
       className={`relative overflow-hidden rounded-2xl ${className}`}
       aria-hidden="true"
     >
-      <Skeleton className="w-full h-full" />
+      {/* <Skeleton className="w-full h-full" /> */}
       {/* shimmer sweep */}
       <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/10 to-transparent" />
     </div>
