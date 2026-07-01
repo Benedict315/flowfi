@@ -2,8 +2,14 @@ import { rpc, xdr, StrKey, Contract, nativeToScVal, Keypair, TransactionBuilder,
 import logger from '../logger.js';
 
 const RPC_URL = process.env.SOROBAN_RPC_URL ?? 'https://soroban-testnet.stellar.org';
-const CONTRACT_ID = process.env.STREAM_CONTRACT_ID ?? '';
-const KEEPER_SECRET = process.env.KEEPER_SECRET_KEY ?? '';
+
+function getContractId(): string {
+  return process.env.STREAM_CONTRACT_ID ?? '';
+}
+
+function getKeeperSecret(): string {
+  return process.env.KEEPER_SECRET_KEY ?? '';
+}
 /**
  * DB data older than this is considered stale and triggers an RPC fallback.
  * 30 s ≈ avg Stellar ledger close time (~5 s) × 6 ledgers — a reasonable
@@ -27,7 +33,22 @@ const TX_TIMEOUT_SECONDS = 30;
  */
 const SIMULATION_PLACEHOLDER_ACCOUNT = 'GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN';
 
-const server = new rpc.Server(RPC_URL, { allowHttp: true });
+let _server: rpc.Server | null = null;
+
+function getServer(): rpc.Server {
+  if (!_server) {
+    _server = new rpc.Server(RPC_URL, { allowHttp: true });
+  }
+  return _server;
+}
+
+export function setServer(server: rpc.Server): void {
+  _server = server;
+}
+
+export function resetServer(): void {
+  _server = null;
+}
 
 export interface ChainStream {
   streamId: number;
@@ -66,7 +87,7 @@ function decodeMap(val: xdr.ScVal): Record<string, xdr.ScVal> {
 }
 
 async function simulateContractCall(method: string, args: xdr.ScVal[]): Promise<xdr.ScVal> {
-  const contract = new Contract(CONTRACT_ID);
+  const contract = new Contract(getContractId());
 
   const op = contract.call(method, ...args);
 
@@ -86,7 +107,7 @@ async function simulateContractCall(method: string, args: xdr.ScVal[]): Promise<
     .setTimeout(TX_TIMEOUT_SECONDS)
     .build();
 
-  const result = await server.simulateTransaction(tx);
+  const result = await getServer().simulateTransaction(tx);
 
   if (rpc.Api.isSimulationError(result)) {
     throw new Error(`Simulation error: ${result.error}`);
@@ -97,11 +118,12 @@ async function simulateContractCall(method: string, args: xdr.ScVal[]): Promise<
 }
 
 export async function submitContractCall(method: string, args: xdr.ScVal[], senderSecret: string): Promise<string> {
-  if (!CONTRACT_ID) throw new Error('CONTRACT_ID not set');
+  const contractId = getContractId();
+  if (!contractId) throw new Error('CONTRACT_ID not set');
 
   const keypair = Keypair.fromSecret(senderSecret);
-  const contract = new Contract(CONTRACT_ID);
-  const account = await server.getAccount(keypair.publicKey());
+  const contract = new Contract(contractId);
+  const account = await getServer().getAccount(keypair.publicKey());
 
   const op = contract.call(method, ...args);
 
@@ -117,7 +139,7 @@ export async function submitContractCall(method: string, args: xdr.ScVal[], send
     .build();
 
   // Simulate first to get foot print and resource info
-  const simulation = await server.simulateTransaction(tx);
+  const simulation = await getServer().simulateTransaction(tx);
   if (rpc.Api.isSimulationError(simulation)) {
     throw new Error(`Simulation failed: ${simulation.error}`);
   }
@@ -126,7 +148,7 @@ export async function submitContractCall(method: string, args: xdr.ScVal[], send
   const assembledTx = rpc.assembleTransaction(tx, simulation).build();
   assembledTx.sign(keypair);
 
-  const response = await server.sendTransaction(assembledTx);
+  const response = await getServer().sendTransaction(assembledTx);
 
   if (response.status === 'ERROR') {
     throw new Error(`Transaction failed: ${JSON.stringify(response.errorResult)}`);
@@ -136,7 +158,7 @@ export async function submitContractCall(method: string, args: xdr.ScVal[], send
 }
 
 export async function getStreamFromChain(streamId: number): Promise<ChainStream | null> {
-  if (!CONTRACT_ID) return null;
+  if (!getContractId()) return null;
 
   try {
     const retval = await simulateContractCall('get_stream', [
@@ -168,7 +190,7 @@ export async function getStreamFromChain(streamId: number): Promise<ChainStream 
 }
 
 export async function getClaimableFromChain(streamId: number): Promise<string | null> {
-  if (!CONTRACT_ID) return null;
+  if (!getContractId()) return null;
 
   try {
     const retval = await simulateContractCall('get_claimable_amount', [
@@ -189,12 +211,13 @@ export async function cancelStream(streamId: number, senderSecret: string): Prom
 }
 
 export async function topUpStream(streamId: number, amount: bigint, callerAddress: string): Promise<string> {
-  if (!KEEPER_SECRET) throw new Error('KEEPER_SECRET_KEY not configured');
+  const keeperSecret = getKeeperSecret();
+  if (!keeperSecret) throw new Error('KEEPER_SECRET_KEY not configured');
   return submitContractCall('top_up_stream', [
     nativeToScVal(streamId, { type: 'u64' }),
     nativeToScVal(amount, { type: 'i128' }),
     nativeToScVal(callerAddress, { type: 'address' }),
-  ], KEEPER_SECRET);
+  ], keeperSecret);
 }
 
 /** Returns true when the DB record is older than STALE_THRESHOLD_MS. */
@@ -215,7 +238,7 @@ export async function pauseStream(
   senderAddress: string,
   streamId: number
 ): Promise<PauseResumeResult> {
-  if (!CONTRACT_ID) {
+  if (!getContractId()) {
     throw new Error('Stream contract ID not configured');
   }
 
@@ -249,7 +272,7 @@ export async function resumeStream(
   senderAddress: string,
   streamId: number
 ): Promise<PauseResumeResult> {
-  if (!CONTRACT_ID) {
+  if (!getContractId()) {
     throw new Error('Stream contract ID not configured');
   }
 
@@ -282,7 +305,7 @@ export async function withdraw(
   streamId: number,
   recipientAddress: string,
 ): Promise<PauseResumeResult> {
-  if (!CONTRACT_ID) {
+  if (!getContractId()) {
     throw new Error('Stream contract ID not configured');
   }
 
