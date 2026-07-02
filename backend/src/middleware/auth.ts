@@ -113,7 +113,12 @@ export function verifyJwt(token: string): { publicKey: string } | null {
     }
 
     // Use timingSafeEqual to prevent timing attacks
-    if (providedSig.length !== expected.length || !crypto.timingSafeEqual(providedSig, expected)) {
+    // This will throw if lengths differ, or return false if content differs
+    try {
+      if (!crypto.timingSafeEqual(providedSig, expected)) {
+        return null;
+      }
+    } catch {
       return null;
     }
 
