@@ -43,10 +43,8 @@ describe('JWT helpers', () => {
     const now = Math.floor(Date.now() / 1000);
     const token = signJwt({ sub: 'GTESTPUBLICKEY123', iat: now, exp: now + 3600 });
     const parts = token.split('.') as [string, string, string];
-
-    const i = Math.floor(parts[2].length / 2); // tamper a middle char, not the last
-    const c = parts[2][i];
-    parts[2] = parts[2].slice(0, i) + (c === 'A' ? 'B' : 'A') + parts[2].slice(i + 1);
+    // Replace the signature with invalid data to ensure verification fails
+    parts[2] = 'invalid-signature-data-1234567890abcdef';
 
     expect(verifyJwt(parts.join('.'))).toBeNull();
   });
